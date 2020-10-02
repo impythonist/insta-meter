@@ -5,6 +5,7 @@ import re
 from urllib.parse import quote
 
 import requests
+import datetime
 
 COUNTERS_KEY = 'acc'
 COUNT_KEY_FOLLOWING = 'f'  # Following
@@ -57,7 +58,7 @@ class InstaMeter:
         # self.rhx_gis = m.group(1)
         
 
-    def analyze_profile(self):
+    def analyze_profile(self, timestamp_end=None):
         try:
             self.__get_profile_first_posts()
         except ValueError as exc:
@@ -65,7 +66,7 @@ class InstaMeter:
             self.__use_callback({'success': False, 'error': self.__error})
             return self.__error
         if not self.user['ip'] and self.user[COUNTERS_KEY][COUNT_KEY_POSTS]:
-            self.__get_profile_rest_posts()
+            self.__get_profile_rest_posts(timestamp_end)
             self.__send_success_callback('posts_result', self.posts, 60)
             self.__analyze_top_liked_posts()
             self.__analyze_top_commented_posts()
@@ -142,8 +143,9 @@ class InstaMeter:
         self.__calculate_per_post_counters()
         self.__send_callback_for_post_processing(posts_for_update)
 
-    def __get_profile_rest_posts(self):
-        while self.__tmp_req_info['has_next_page']:
+    def __get_profile_rest_posts(self, timestamp=None):
+        exit = False
+        while self.__tmp_req_info['has_next_page'] and not exit:
             self.__request_for_rest_loop()
             posts_for_update = []
             for post in self.__tmp_data:
@@ -158,10 +160,16 @@ class InstaMeter:
                     tmp_post['is_thumbnail'] = True
                 except:
                     pass
-
+                
                 tmp_post.update(self.__update_user_and_post_counters(post))
                 posts_for_update.append(tmp_post)
 
+                if timestamp:
+                    curr_date = datetime.datetime.fromtimestamp(tmp_post['d'])
+                    print(curr_date)
+                    if curr_date < timestamp:
+                        exit = True
+                        break
             self.posts.extend(posts_for_update)
             self.__calculate_per_post_counters()
             self.__send_callback_for_post_processing(posts_for_update)
